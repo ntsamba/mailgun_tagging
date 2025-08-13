@@ -2,36 +2,60 @@ import requests
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 
-MAILGUN_DOMAIN = "YOUR_DOMAIN_NAME"  # e.g., sandbox123.mailgun.org
+MAILGUN_DOMAIN = "YOUR_DOMAIN_NAME"  # e.g., sandboxXXX.mailgun.org
 MAILGUN_API_KEY = "YOUR_API_KEY"
 
-def fetch_tag_stats(tag, days_back=1):
+def fetch_metrics(tag, hours_back):
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=days_back)
+    start = end - timedelta(hours=hours_back)
 
-    params = {
-        "event": ["delivered", "opened", "clicked", "failed"],
-        "start": format_datetime(start),
+    url = "https://api.mailgun.net/v1/analytics/metrics"
+
+    payload = {
+        "start": format_datetime(start),  # RFC 2822 format
         "end": format_datetime(end),
         "resolution": "hour",
-        "group": tag
- }
+        "duration": f"{hours_back}h",  # Not strictly required. Overwrites the start date
+        "dimensions": ["time"],
+        "metrics": [
+            "accepted_count",
+            "delivered_count",
 
-    response = requests.get(
-        f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/stats/total",
+            "clicked_rate",
+            "opened_rate",
+            "failed_count"
+        ],
+        "filter": {
+            "AND": [
+                {
+                    "attribute": "tag",
+                    "comparator": "=",
+                    "values": [
+                        {
+                            "label": tag,
+                            "value": tag
+                        }
+                    ]
+                }
+            ]
+        },
+        "include_subaccounts": True,
+        "include_aggregates": True
+    }
+
+    response = requests.post(
+        url,
         auth=("api", MAILGUN_API_KEY),
-        params=params
- )
+        json=payload
+    )
 
     if response.status_code == 200:
-        return response.json()["stats"]
+        data = response.json()
+        print("Metrics Filter by TAGs API response:")
+        print(data)
+        return data
     else:
         print("Error:", response.status_code, response.text)
-        return []
+        return None
 
-# Get Stats for welcome-email tag
-stats = fetch_tag_stats(tag="TAG")
-for day in stats:
-    print(day["time"])
-    for metric in ["delivered", "failed", "opened", "clicked"]:
-        print(f"  {metric}: {day[metric]}")
+fetch_metrics(tag="quote", hours_back=1)
